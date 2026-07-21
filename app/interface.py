@@ -1,7 +1,5 @@
-import joblib
 import pandas as pd
-
-model = joblib.load("../models/recommendation_model.pkl")
+from sklearn.metrics.pairwise import cosine_similarity
 
 ratings = pd.read_csv(
     "../dataset/ml-100k/u.data",
@@ -18,42 +16,68 @@ movies = pd.read_csv(
     names=["movie_id", "title"]
 )
 
+data = pd.merge(ratings, movies, on="movie_id")
+
+movie_user = data.pivot_table(
+    index="title",
+    columns="user_id",
+    values="rating"
+).fillna(0)
+
+movie_similarity = pd.DataFrame(
+    cosine_similarity(movie_user),
+    index=movie_user.index,
+    columns=movie_user.index
+)
+
 print("=" * 50)
 print("Movie Recommendation System")
 print("=" * 50)
 
-user_id = int(input("Enter User ID (1-943): "))
+movie_name = input("\nEnter a movie name: ").strip()
 
-recommendations = []
+matches = [
+    title for title in movie_similarity.index
+    if movie_name.lower() in title.lower()
+]
 
-for movie in movies["movie_id"]:
+if len(matches) == 0:
+    print("\nMovie not found.")
+    exit()
 
-    prediction = model.predict(user_id, movie)
+if len(matches) > 1:
 
-    recommendations.append(
-        (movie, prediction.est)
-    )
+    print("\nMultiple movies found:\n")
 
-recommendations = sorted(
-    recommendations,
-    key=lambda x: x[1],
-    reverse=True
-)
+    for i, title in enumerate(matches, start=1):
+        print(f"{i}. {title}")
 
-print("\nTop 10 Movie Recommendations\n")
+    choice = int(input("\nSelect a movie number: "))
 
-count = 0
+    movie = matches[choice - 1]
 
-for movie_id, score in recommendations:
+else:
 
-    title = movies.loc[
-        movies["movie_id"] == movie_id,
-        "title"
-    ].values[0]
+    movie = matches[0]
 
-    print(f"{count+1}. {title}  ({score:.2f})")
+print("\nMovie Selected")
+print("-------------------")
+print(movie)
 
-    count += 1
+average = data[data["title"] == movie]["rating"].mean()
 
-    if count == 10:
-        break
+total = data[data["title"] == movie]["rating"].count()
+
+print(f"\nAverage Rating : {average:.2f}")
+
+print(f"Total Ratings  : {total}")
+
+print("\nTop 10 Recommended Movies")
+print("---------------------------")
+
+recommendations = movie_similarity[movie].sort_values(
+    ascending=False
+)[1:11]
+
+for i, title in enumerate(recommendations.index, start=1):
+    print(f"{i}. {title}")
